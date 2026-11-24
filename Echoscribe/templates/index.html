@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoScribe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .container {
+            max-width: 900px;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .text-gradient {
+            background-image: linear-gradient(to right, #6b46c1, #805ad5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .btn-primary {
+            background-image: linear-gradient(to right, #6b46c1, #805ad5);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        input[type="file"]::file-selector-button {
+            border: none;
+            padding: .5em 1em;
+            border-radius: 0.5rem;
+            background-color: #805ad5;
+            color: white;
+            cursor: pointer;
+            transition: background-color .3s ease-in-out;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #6b46c1;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen py-10">
+    <div class="container mx-auto p-4">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-extrabold text-gray-900 mb-2 text-gradient">EchoScribe</h1>
+            <p class="text-gray-600 font-medium">Generate professional minutes of meeting from your audio files instantly.</p>
+        </div>
+
+        <div class="card space-y-10">
+            <!-- File Upload Area -->
+            <div>
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">Upload Audio File</h2>
+                <div class="w-full p-6 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors duration-200">
+                    <label for="audioFile" class="w-full text-center text-sm font-semibold text-gray-700">
+                        <span id="fileLabelText">Click here to select an audio file</span>
+                    </label>
+                    <input type="file" id="audioFile" accept="audio/*" class="w-full text-sm text-gray-700 mt-2">
+                </div>
+            </div>
+
+            <!-- Display Area for Transcript and Status -->
+            <div id="status" class="text-center font-medium text-purple-600 hidden"></div>
+
+            <div id="transcriptSection" style="display:none;">
+                <h2 class="text-2xl font-bold mb-3 text-gray-800">Transcript</h2>
+                <div id="transcriptOutput" class="w-full h-48 bg-gray-100 p-6 rounded-lg overflow-y-auto border border-gray-300 text-sm text-gray-700"></div>
+            </div>
+
+            <!-- Action Button -->
+            <div class="flex items-center justify-center">
+                <button id="generateBtn" class="w-full px-8 py-4 rounded-full text-white font-bold tracking-wide btn-primary" style="display:none;">
+                    Generate Minutes
+                </button>
+            </div>
+            
+            <!-- Output Sections -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="outputSections" style="display:none;">
+                <!-- Summary Section -->
+                <div>
+                    <h2 class="text-2xl font-bold mb-3 text-gray-800">Summary</h2>
+                    <div id="summary" class="w-full h-48 bg-gray-100 p-6 rounded-lg overflow-y-auto border border-gray-300 text-sm text-gray-700"></div>
+                </div>
+
+                <!-- Tasks Section -->
+                <div>
+                    <h2 class="text-2xl font-bold mb-3 text-gray-800">Action Items</h2>
+                    <div id="tasks" class="w-full h-48 bg-gray-100 p-6 rounded-lg overflow-y-auto border border-gray-300 text-sm text-gray-700"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const generateBtn = document.getElementById('generateBtn');
+        const transcriptOutput = document.getElementById('transcriptOutput');
+        const summaryEl = document.getElementById('summary');
+        const tasksEl = document.getElementById('tasks');
+        const statusEl = document.getElementById('status');
+        const audioFileEl = document.getElementById('audioFile');
+        const fileLabelText = document.getElementById('fileLabelText');
+        const outputSections = document.getElementById('outputSections');
+        const transcriptSection = document.getElementById('transcriptSection');
+
+        audioFileEl.addEventListener('change', async () => {
+            const file = audioFileEl.files[0];
+            if (!file) {
+                fileLabelText.textContent = 'Click here to select an audio file';
+                return;
+            }
+            fileLabelText.textContent = `File selected: ${file.name}`;
+            
+            // Reset previous outputs and show a processing message
+            transcriptOutput.textContent = '';
+            summaryEl.textContent = '';
+            tasksEl.textContent = '';
+            transcriptSection.style.display = 'none';
+            generateBtn.style.display = 'none';
+            outputSections.style.display = 'none';
+            statusEl.textContent = 'Transcribing audio... this may take a moment.';
+            statusEl.classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            try {
+                // Send the audio file to the Python server
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    transcriptOutput.textContent = data.transcript;
+                    transcriptSection.style.display = 'block';
+                    generateBtn.style.display = 'block';
+                    statusEl.textContent = 'Transcription complete!';
+                } else {
+                    statusEl.textContent = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                console.error('Transcription failed:', error);
+                statusEl.textContent = 'Transcription failed. Please ensure the server is running.';
+            } finally {
+                // Hide the status after a short delay
+                setTimeout(() => statusEl.classList.add('hidden'), 3000);
+            }
+        });
+
+        generateBtn.addEventListener('click', () => {
+            const transcript = transcriptOutput.textContent.trim();
+            if (transcript === "") {
+                statusEl.textContent = 'No transcript available to process.';
+                statusEl.classList.remove('hidden');
+                return;
+            }
+
+            statusEl.textContent = 'Generating minutes...';
+            statusEl.classList.remove('hidden');
+            
+            // Simulate a short processing delay for a more realistic feel
+            setTimeout(() => {
+                processTranscript(transcript);
+                outputSections.style.display = 'grid';
+                statusEl.classList.add('hidden');
+            }, 1000);
+        });
+
+        function processTranscript(text) {
+            // This is a simplified "AI" logic.
+            const sentences = text.split(/[.!?]\s*/).filter(Boolean);
+
+            // Simple Summarization: Take the first three sentences as a summary
+            const summary = sentences.slice(0, 3).join('. ') + (sentences.length > 3 ? '.' : '');
+            summaryEl.textContent = summary || 'No summary could be generated.';
+
+            // Simple Task Extraction: Look for keywords
+            const taskKeywords = ['action item', 'to do', 'need to', 'I will', 'we will', 'let\'s'];
+            const tasks = sentences.filter(sentence => 
+                taskKeywords.some(keyword => sentence.toLowerCase().includes(keyword))
+            );
+
+            tasksEl.textContent = tasks.length > 0 ? tasks.join('\n- ') : 'No action items were identified.';
+            if (tasks.length > 0) {
+                tasksEl.textContent = '- ' + tasksEl.textContent;
+            }
+        }
+    </script>
+</body>
+</html>
